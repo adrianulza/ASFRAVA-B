@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Ulza
+    given-names: Adrian
+  - family-names: Idris
+    given-names: Yunita
+  - family-names: Ramadhan
+    given-names: Muhammad Aulia
+  - family-names: Syamsidik
+    given-names: 
+  - family-names: Amalia
+    given-names: Zahra
+title: "Automated seismic fragility and vulnerability assessment for buildings (ASFRAVA-B): Integrating probabilistic seismic design into performance-based engineering practices"
+version: "1.0"
+doi: "10.1016/j.ijdrr.2025.105679"
+date-released: "2025-01-01"
+repository-code: "https://github.com/adrianulza/ASFRAVA-B"

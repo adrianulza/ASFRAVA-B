@@ -1,0 +1,20 @@
+# --- Python cache & compiled ---
+__pycache__/
+*.py[cod]
+
+# --- Virtual environment ---
+.venv/
+
+# --- Build artifacts ---
+build/
+dist/
+*.spec
+
+# --- Sample outputs ---
+output/
+    
+
+# --- IDE / OS junk ---
+.vscode/
+.DS_Store
+Thumbs.db
