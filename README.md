@@ -5,7 +5,7 @@
 **ASFRAVA-B** (Automated Seismic Fragility and Vulnerability Assessment for Buildings) integrates probabilistic seismic design into performance-based engineering practices.
 
 **Citation:**
-- Adrian Ulza (2025). *Automated Seismic Fragility and Vulnerability Assessment for Buildings (ASFRAVA-B): Integrating Probabilistic Seismic Design into Performance-Based Engineering Practices*, International Journal of Disaster Risk Reduction, [https://doi.org/10.1016/j.ijdrr.2025.105679](https://doi.org/10.1016/j.ijdrr.2025.105679)
+- Ulza, A. et al. (2025). *Automated Seismic Fragility and Vulnerability Assessment for Buildings (ASFRAVA-B): Integrating Probabilistic Seismic Design into Performance-Based Engineering Practices*, International Journal of Disaster Risk Reduction, [https://doi.org/10.1016/j.ijdrr.2025.105679](https://doi.org/10.1016/j.ijdrr.2025.105679)
 
 ---
 
