@@ -120,7 +120,14 @@ def analyze(
             GMRS = pd.read_csv(fp, delimiter=settings.CSV_SEP, header=0, engine="python")
             dt = abs(GMRS.iloc[1, 0] - GMRS.iloc[0, 0])
             nPts = len(GMRS)
-            GMRS_acc = GMRS.iloc[:, 1] * (1 / max(GMRS.iloc[:, 1]))  # Normalizing PGA of GMRS
+
+            GMRS_acc_raw = GMRS.iloc[:, 1].to_numpy(dtype=float)
+            peak_abs_acc = np.max(np.abs(GMRS_acc_raw))
+
+            if peak_abs_acc <= 0.0:
+                raise ValueError(f"Ground motion {record} has zero peak acceleration; cannot normalize.")
+
+            GMRS_acc = GMRS_acc_raw / peak_abs_acc  # Normalize by true absolute PGA
 
             intersected = True  # Track intersection status
 
@@ -152,7 +159,7 @@ def analyze(
                     Hkin = (strength_u - strength_y) / (deformation_u - deformation_y)  # Kinematic hardening (kN/m)
 
                     ops.uniaxialMaterial("Hardening", matTag, Ki, strength_y, 0, Hkin)
-                    ops.element("zeroLength", 1, 1, 2, "-mat", 1, "-dir", 1)
+                    ops.element("zeroLength", 1, 1, 2, "-mat", 1, "-dir", 1, "-doRayleigh", 1)
 
                     # Ground motion record
                     ops.timeSeries("Path", 2, "-values", *GMRS_acc_scaled, "-dt", dt, "-factor", g)
@@ -175,7 +182,7 @@ def analyze(
                     ops.integrator("Newmark", gamma, beta)
                     ops.analysis("Transient")
 
-                    dtAnalysis = dt * 0.25
+                    dtAnalysis = dt
                     TmaxAnalysis = dt * nPts
                     tFinal = TmaxAnalysis
                     ok = 0
@@ -196,8 +203,8 @@ def analyze(
                         u1.append(ops.nodeDisp(2, 1))
 
                     # Store results
-                    Acc.append(max(u1) * (omega**2) / g)
-                    Disp.append(max(u1))
+                    Acc.append(np.max(np.abs(u1)) * (omega**2) / g)
+                    Disp.append(np.max(np.abs(u1)))
 
                 Acc = np.array(Acc)
                 Disp = np.array(Disp)
@@ -223,7 +230,7 @@ def analyze(
 
                     # Store data and plot information
                     sdv_point.append(fail_state_displ if state == "not intersected" else intersection_point[0])
-                    pga_point.append(max(GMRS_acc_scaled))
+                    pga_point.append(np.max(np.abs(GMRS_acc_scaled)))
                     sa_point.append(fail_state_acc if state == "not intersected" else intersection_point[1])
 
                 state_list.append(state)  # Move this outside the if-else block to ensure it's always assigned
