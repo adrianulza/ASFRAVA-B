@@ -14,6 +14,7 @@ setup_logging(level=settings.log_level, console=settings.log_to_console)
 def run():
     ctk.set_appearance_mode("light")
     ctk.set_default_color_theme("dark-blue")
+
     try:
         app = mainUI()
         app.mainloop()
