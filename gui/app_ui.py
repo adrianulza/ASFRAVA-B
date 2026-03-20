@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import subprocess
@@ -23,14 +25,11 @@ logger = logging.getLogger(__name__)
 
 def _normalize_workflow_config(workflow_config: dict | None) -> dict:
     config = workflow_config or {}
-    im_method = config.get("im_method", "PGA")
-    period_mode = config.get("period_mode")
-    period_value = config.get("period_value")
-
     return {
-        "im_method": im_method,
-        "period_mode": period_mode,
-        "period_value": period_value,
+        "im_method": config.get("im_method", "PGA"),
+        "period_mode": config.get("period_mode"),
+        "period_value": config.get("period_value"),
+        "resolved_period": config.get("resolved_period"),
     }
 
 
@@ -46,9 +45,7 @@ class mainUI(ctk.CTk):
             logger.warning("Failed setting icon", exc_info=True)
 
         self.workflow_config = _normalize_workflow_config(workflow_config)
-        self.workflow_backend_ready = self.workflow_config["im_method"] == "PGA"
 
-        # App-wide state (no globals)
         self.capacity_data: pd.DataFrame | None = None
         self.building_params: pd.DataFrame | None = None
         self.capacity_Sd = None
@@ -58,7 +55,6 @@ class mainUI(ctk.CTk):
         self.gmrs_folderpath: str | None = None
         self.analysis_cancelled: bool = False
 
-        # Configure layout and create UI elements
         self._configure_grid()
         self._create_widgets()
 
@@ -68,11 +64,7 @@ class mainUI(ctk.CTk):
         else:
             self._apply_workflow_state()
 
-    # ------------------------------------------------------------------
-    #                     LOG HANDLERS
-    # ------------------------------------------------------------------
     def open_logs(self) -> None:
-        """Open the application log folder in the OS file explorer."""
         path = str(user_log_dir())
         try:
             if sys.platform.startswith("win"):
@@ -85,14 +77,10 @@ class mainUI(ctk.CTk):
             logger.exception("Failed to open log folder: %s", path)
             messagebox.showerror("Open Logs", f"Failed to open log folder:\n{path}")
 
-    # ------------------------------------------------------------------
-    #                     UI LAYOUT / WIDGETS
-    # ------------------------------------------------------------------
     def _configure_grid(self) -> None:
-        # Columns
         self.columnconfigure(0, weight=1, uniform="a")
         self.columnconfigure((1, 2), weight=2, uniform="a")
-        # Rows
+
         self.rowconfigure(0, weight=1, uniform="b")
         self.rowconfigure(1, weight=8, uniform="b")
         self.rowconfigure(2, weight=2, uniform="b")
@@ -100,7 +88,6 @@ class mainUI(ctk.CTk):
         self.rowconfigure(4, weight=4, uniform="b")
 
     def _create_widgets(self) -> None:
-        # ============ Frames ============ #
         self.frame_0 = ctk.CTkFrame(self, fg_color="white")
         self.frame_0.grid(column=0, row=0, sticky="nsew", padx=1, pady=1)
         self.frame_0.columnconfigure(0, weight=1)
@@ -117,130 +104,131 @@ class mainUI(ctk.CTk):
         self.frame_2.rowconfigure(0, weight=1)
 
         self.frame_3 = ctk.CTkFrame(self, fg_color="white")
-        self.frame_3.grid(column=0, row=3, rowspan=1, sticky="nsew", padx=1, pady=1)
+        self.frame_3.grid(column=0, row=3, sticky="nsew", padx=1, pady=1)
         self.frame_3.columnconfigure(0, weight=1)
         self.frame_3.rowconfigure(0, weight=1)
 
         self.frame_4 = ctk.CTkFrame(self, fg_color="white")
-        self.frame_4.grid(column=0, row=4, rowspan=1, sticky="nsew", padx=1, pady=1)
+        self.frame_4.grid(column=0, row=4, sticky="nsew", padx=1, pady=1)
         self.frame_4.columnconfigure(0, weight=1)
         self.frame_4.rowconfigure(0, weight=1)
 
         self.output_idealization_frame = ctk.CTkFrame(self, width=400, height=200, fg_color="white")
-        self.output_idealization_frame.grid(column=1, row=1, rowspan=1, sticky="nsew", padx=(1, 1), pady=(1, 1))
+        self.output_idealization_frame.grid(column=1, row=1, sticky="nsew", padx=1, pady=1)
 
         self.output_EDPs_frame = ctk.CTkFrame(self, width=400, height=200, fg_color="white")
-        self.output_EDPs_frame.grid(column=2, row=1, rowspan=1, sticky="nsew", padx=(1, 1), pady=(1, 1))
+        self.output_EDPs_frame.grid(column=2, row=1, sticky="nsew", padx=1, pady=1)
 
         self.output_fragility_frame = ctk.CTkFrame(self, width=400, height=200, fg_color="white")
-        self.output_fragility_frame.grid(column=1, row=2, rowspan=3, sticky="nsew", padx=(1, 1), pady=(1, 20))
+        self.output_fragility_frame.grid(column=1, row=2, rowspan=3, sticky="nsew", padx=1, pady=(1, 20))
 
         self.output_vulnerability_frame = ctk.CTkFrame(self, width=400, height=200, fg_color="white")
-        self.output_vulnerability_frame.grid(column=2, row=2, rowspan=3, sticky="nsew", padx=(1, 1), pady=(1, 20))
+        self.output_vulnerability_frame.grid(column=2, row=2, rowspan=3, sticky="nsew", padx=1, pady=(1, 20))
 
         self.progress = ProgressTracker(self)
 
-        # ============ Labels ============ #
-        # Title
-        self.label_Title = ctk.CTkLabel(self, text="App Input", font=("Inter", 24, "bold"), fg_color="white")
-        self.label_Title.grid(row=0, column=0, sticky="wn", padx=15, pady=10, columnspan=1)
-        self.label_Title = ctk.CTkLabel(self, text="Graph", font=("Inter", 24, "bold"), fg_color="white")
-        self.label_Title.grid(row=0, column=1, sticky="n", padx=15, pady=10, columnspan=2)
+        self.label_title_inputs = ctk.CTkLabel(self, text="App Input", font=("Inter", 24, "bold"), fg_color="white")
+        self.label_title_inputs.grid(row=0, column=0, sticky="wn", padx=15, pady=10)
 
-        # Subtitle
+        self.label_title_graph = ctk.CTkLabel(self, text="Graph", font=("Inter", 24, "bold"), fg_color="white")
+        self.label_title_graph.grid(row=0, column=1, sticky="n", padx=15, pady=10, columnspan=2)
+
         self.label_subtitle_0 = ctk.CTkLabel(self, text="Model setup", font=("Arial bold", 14), fg_color="white")
-        self.label_subtitle_0.grid(row=1, column=0, sticky="wn", padx=15, pady=(5, 0), columnspan=1)
+        self.label_subtitle_0.grid(row=1, column=0, sticky="wn", padx=15, pady=(5, 0))
+
         self.label_subtitle_1 = ctk.CTkLabel(self, text="Scaling setup", font=("Arial bold", 14), fg_color="white")
-        self.label_subtitle_1.grid(row=2, column=0, sticky="wn", padx=15, pady=(5, 0), columnspan=1)
+        self.label_subtitle_1.grid(row=2, column=0, sticky="wn", padx=15, pady=(5, 0))
+
         self.label_subtitle_3 = ctk.CTkLabel(self, text="Analysis", font=("Arial bold", 14), fg_color="white")
-        self.label_subtitle_3.grid(row=3, column=0, sticky="wn", padx=15, pady=(5, 0), columnspan=1)
+        self.label_subtitle_3.grid(row=3, column=0, sticky="wn", padx=15, pady=(5, 0))
+
         self.label_subtitle_2 = ctk.CTkLabel(self, text="Statistical setup", font=("Arial bold", 14), fg_color="white")
-        self.label_subtitle_2.grid(row=4, column=0, sticky="wn", padx=15, pady=(5, 0), columnspan=1)
+        self.label_subtitle_2.grid(row=4, column=0, sticky="wn", padx=15, pady=(5, 0))
 
-        # Settings
         self.label_0 = ctk.CTkLabel(self, text="Idealization:", font=("Inter", 14), fg_color="white")
-        self.label_0.grid(row=1, column=0, sticky="wn", padx=15, pady=(35, 0), columnspan=1)
-        self.label_1 = ctk.CTkLabel(self, text="Workflow IM:", font=("Inter", 14), fg_color="white")
-        self.label_1.grid(row=1, column=0, sticky="wn", padx=15, pady=(70, 0), columnspan=1)
-        self.label_1_value = ctk.CTkLabel(self, text="", font=("Inter", 13, "bold"), fg_color="white")
-        self.label_1_value.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(70, 0), columnspan=1)
+        self.label_0.grid(row=1, column=0, sticky="wn", padx=15, pady=(35, 0))
 
-        self.label_period_mode = ctk.CTkLabel(self, text="Period source:", font=("Inter", 12), fg_color="white")
-        self.label_period_mode.grid(row=1, column=0, sticky="wn", padx=15, pady=(95, 0), columnspan=1)
-        self.label_period_mode_value = ctk.CTkLabel(self, text="", font=("Inter", 12), fg_color="white")
-        self.label_period_mode_value.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(95, 0), columnspan=1)
+        self.label_workflow_im = ctk.CTkLabel(self, text="Workflow IM:", font=("Inter", 13), fg_color="white")
+        self.label_workflow_im.grid(row=1, column=0, sticky="wn", padx=15, pady=(68, 0))
 
-        self.label_workflow_note = ctk.CTkLabel(
-            self,
-            text="",
-            font=("Inter", 10),
-            fg_color="white",
-            justify="left",
-            wraplength=380,
-            anchor="w",
-            text_color="#5f6368",
-        )
-        self.label_workflow_note.grid(row=1, column=0, sticky="wn", padx=15, pady=(118, 0), columnspan=1)
+        self.label_workflow_im_value = ctk.CTkLabel(self, text="", font=("Inter", 13, "bold"), fg_color="white")
+        self.label_workflow_im_value.grid(row=1, column=0, sticky="ne", padx=15, pady=(68, 0))
+
+        self.label_period_source = ctk.CTkLabel(self, text="Period source:", font=("Inter", 13), fg_color="white")
+        self.label_period_source.grid(row=1, column=0, sticky="wn", padx=15, pady=(94, 0))
+
+        self.label_period_source_value = ctk.CTkLabel(self, text="", font=("Inter", 13), fg_color="white")
+        self.label_period_source_value.grid(row=1, column=0, sticky="ne", padx=15, pady=(94, 0))
 
         self.label_2 = ctk.CTkLabel(self, text="Choose output folder", font=("Inter", 14), fg_color="white")
-        self.label_2.grid(row=1, column=0, sticky="wn", padx=15, pady=(155, 0), columnspan=1)
+        self.label_2.grid(row=1, column=0, sticky="wn", padx=15, pady=(125, 0))
+
         self.label_3 = ctk.CTkLabel(self, text="Capacity curve", font=("Inter", 14), fg_color="white")
-        self.label_3.grid(row=1, column=0, sticky="wn", padx=15, pady=(215, 0), columnspan=1)
+        self.label_3.grid(row=1, column=0, sticky="wn", padx=15, pady=(185, 0))
+
         self.label_4 = ctk.CTkLabel(self, text="Building parameters", font=("Inter", 14), fg_color="white")
-        self.label_4.grid(row=1, column=0, sticky="wn", padx=15, pady=(295, 0), columnspan=1)
+        self.label_4.grid(row=1, column=0, sticky="wn", padx=15, pady=(270, 0))
+
         self.label_5 = ctk.CTkLabel(self, text="Ground motion records", font=("Inter", 14), fg_color="white")
-        self.label_5.grid(row=1, column=0, sticky="wn", padx=15, pady=(355, 0), columnspan=1)
+        self.label_5.grid(row=1, column=0, sticky="wn", padx=15, pady=(330, 0))
 
         self.label_6 = ctk.CTkLabel(self, text="Min. scale", font=("Inter", 12), fg_color="white")
-        self.label_6.grid(row=2, column=0, sticky="wn", padx=15, pady=(30, 0), columnspan=1)
+        self.label_6.grid(row=2, column=0, sticky="wn", padx=15, pady=(30, 0))
+
         self.label_7 = ctk.CTkLabel(self, text="Max. scale", font=("Inter", 12), fg_color="white")
-        self.label_7.grid(row=2, column=0, sticky="n", padx=10, pady=(30, 0), columnspan=1)
+        self.label_7.grid(row=2, column=0, sticky="n", padx=10, pady=(30, 0))
+
         self.label_8 = ctk.CTkLabel(self, text="Increment", font=("Inter", 12), fg_color="white")
-        self.label_8.grid(row=2, column=0, sticky="en", padx=10, pady=(30, 0), columnspan=1)
+        self.label_8.grid(row=2, column=0, sticky="en", padx=10, pady=(30, 0))
 
         self.label_9 = ctk.CTkLabel(self, text="Regression method:", font=("Inter", 14), fg_color="white")
-        self.label_9.grid(row=4, column=0, sticky="wn", padx=15, pady=(30, 0), columnspan=1)
-        self.label_10 = ctk.CTkLabel(self, text="Loss ratio:", font=("Inter", 14), fg_color="white")
-        self.label_10.grid(row=4, column=0, sticky="wn", padx=15, pady=(55, 0), columnspan=1)
-        self.label_11 = ctk.CTkLabel(self, text="Loss ratio DS1", font=("Inter", 12), fg_color="white")
-        self.label_11.grid(row=4, column=0, sticky="wn", padx=15, pady=(75, 0), columnspan=1)
-        self.label_12 = ctk.CTkLabel(self, text="Loss ratio DS2", font=("Inter", 12), fg_color="white")
-        self.label_12.grid(row=4, column=0, sticky="wn", padx=15, pady=(95, 0), columnspan=1)
-        self.label_13 = ctk.CTkLabel(self, text="Loss ratio DS3", font=("Inter", 12), fg_color="white")
-        self.label_13.grid(row=4, column=0, sticky="wn", padx=15, pady=(115, 0), columnspan=1)
+        self.label_9.grid(row=4, column=0, sticky="wn", padx=15, pady=(30, 0))
 
-        # Plot titles
+        self.label_10 = ctk.CTkLabel(self, text="Loss ratio:", font=("Inter", 14), fg_color="white")
+        self.label_10.grid(row=4, column=0, sticky="wn", padx=15, pady=(55, 0))
+
+        self.label_11 = ctk.CTkLabel(self, text="Loss ratio DS1", font=("Inter", 12), fg_color="white")
+        self.label_11.grid(row=4, column=0, sticky="wn", padx=15, pady=(75, 0))
+
+        self.label_12 = ctk.CTkLabel(self, text="Loss ratio DS2", font=("Inter", 12), fg_color="white")
+        self.label_12.grid(row=4, column=0, sticky="wn", padx=15, pady=(95, 0))
+
+        self.label_13 = ctk.CTkLabel(self, text="Loss ratio DS3", font=("Inter", 12), fg_color="white")
+        self.label_13.grid(row=4, column=0, sticky="wn", padx=15, pady=(115, 0))
+
         self.label_idealization = ctk.CTkLabel(
             self, text="Idealization curve", font=("Inter bold", 14, "bold"), fg_color="white"
         )
-        self.label_idealization.grid(row=1, column=1, sticky="n", padx=15, pady=(3, 0), columnspan=1)
+        self.label_idealization.grid(row=1, column=1, sticky="n", padx=15, pady=(3, 0))
+
         self.label_EDPs = ctk.CTkLabel(
             self, text="Engineering Demand Parameters", font=("Inter bold", 14, "bold"), fg_color="white"
         )
-        self.label_EDPs.grid(row=1, column=2, sticky="n", padx=15, pady=(3, 0), columnspan=1)
-        self.label_fragility = ctk.CTkLabel(
-            self, text="Fragility curve", font=("Inter bold", 14, "bold"), fg_color="white"
-        )
-        self.label_fragility.grid(row=2, column=1, sticky="n", padx=15, pady=(3, 0), columnspan=1)
-        self.label_vulnerability = ctk.CTkLabel(
-            self, text="Vulnerability curve", font=("Inter bold", 14, "bold"), fg_color="white"
-        )
-        self.label_vulnerability.grid(row=2, column=2, sticky="n", padx=15, pady=(3, 0), columnspan=1)
+        self.label_EDPs.grid(row=1, column=2, sticky="n", padx=15, pady=(3, 0))
 
-        # ============ Entries ============ #
+        self.label_fragility = ctk.CTkLabel(
+            self, text="Fragility curve (PGA)", font=("Inter bold", 14, "bold"), fg_color="white"
+        )
+        self.label_fragility.grid(row=2, column=1, sticky="n", padx=15, pady=(3, 0))
+
+        self.label_vulnerability = ctk.CTkLabel(
+            self, text="Vulnerability curve (PGA)", font=("Inter bold", 14, "bold"), fg_color="white"
+        )
+        self.label_vulnerability.grid(row=2, column=2, sticky="n", padx=15, pady=(3, 0))
+
         self.entry_folder_output = ctk.CTkEntry(self, width=400, height=25, font=("Inter Light", 10))
-        self.entry_folder_output.grid(row=1, column=0, sticky="nw", padx=(15, 70), pady=(180, 0))
+        self.entry_folder_output.grid(row=1, column=0, sticky="nw", padx=(15, 70), pady=(150, 0))
         default_out = settings.last_output_dir or ""
         self.entry_folder_output.insert(0, default_out)
 
         self.entry_capacity = ctk.CTkEntry(self, width=400, height=25, font=("Inter Light", 10))
-        self.entry_capacity.grid(row=1, column=0, sticky="nw", padx=(15, 70), pady=(240, 0))
+        self.entry_capacity.grid(row=1, column=0, sticky="nw", padx=(15, 70), pady=(210, 0))
 
         self.entry_building_parameter = ctk.CTkEntry(self, width=400, height=25, font=("Inter Light", 10))
-        self.entry_building_parameter.grid(row=1, column=0, sticky="nw", padx=(15, 70), pady=(325, 0))
+        self.entry_building_parameter.grid(row=1, column=0, sticky="nw", padx=(15, 70), pady=(295, 0))
 
         self.entry_gmrs = ctk.CTkEntry(self, width=400, height=25, font=("Inter Light", 10))
-        self.entry_gmrs.grid(row=1, column=0, sticky="wn", padx=(15, 70), pady=(385, 0))
+        self.entry_gmrs.grid(row=1, column=0, sticky="wn", padx=(15, 70), pady=(355, 0))
 
         self.entry_min_scale = ctk.CTkEntry(self, width=50, height=10, font=("Inter Light", 10))
         self.entry_min_scale.grid(row=2, column=0, sticky="nw", padx=15, pady=(55, 0))
@@ -266,7 +254,6 @@ class mainUI(ctk.CTk):
         self.entry_loss_ratio_ds3.grid(row=4, column=0, sticky="en", padx=15, pady=(120, 0))
         self.entry_loss_ratio_ds3.insert(0, "1.0")
 
-        # ============ Checkboxes ============ #
         self.save_intersections = tk.BooleanVar(value=False)
         self.chk_save_intersections = ctk.CTkCheckBox(
             self,
@@ -291,7 +278,6 @@ class mainUI(ctk.CTk):
         )
         self.chk_fast_mode.grid(row=3, column=0, sticky="ne", padx=0, pady=(30, 0))
 
-        # ============ Plots ============ #
         self.fig_idealization = plt.Figure(figsize=(5, 4), dpi=100)
         self.ax_idealization = self.fig_idealization.add_subplot(111)
         self.ax_idealization.grid(True, alpha=0.3)
@@ -316,8 +302,6 @@ class mainUI(ctk.CTk):
         self.canvas_vulnerability = FigureCanvasTkAgg(self.fig_vulnerability, master=self.output_vulnerability_frame)
         self.canvas_vulnerability.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # ============ Buttons ============ #
-        # Output folder
         self.button_output = ctk.CTkButton(
             self,
             text="Folder",
@@ -327,9 +311,8 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.button_output.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(180, 0))
+        self.button_output.grid(row=1, column=0, sticky="ne", padx=15, pady=(150, 0))
 
-        # Capacity CSV
         self.btn_browse_load_capacity = ctk.CTkButton(
             self,
             text="File",
@@ -339,9 +322,8 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.btn_browse_load_capacity.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(240, 0))
+        self.btn_browse_load_capacity.grid(row=1, column=0, sticky="ne", padx=15, pady=(210, 0))
 
-        # Plot capacity & idealization
         self.button_plot = ctk.CTkButton(
             self,
             text="Plot curve",
@@ -351,14 +333,14 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.button_plot.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(268, 0))
+        self.button_plot.grid(row=1, column=0, sticky="ne", padx=15, pady=(238, 0))
 
-        # Idealization radio buttons
         self.idealization_option = tk.StringVar(value="EPP")
         self.radioEPP = ctk.CTkRadioButton(
             self, text="EPP", font=("Inter Light", 12), bg_color="white", variable=self.idealization_option, value="EPP"
         )
-        self.radioEPP.grid(row=1, column=0, sticky="ne", padx=(0, 30), pady=(40, 15), columnspan=1)
+        self.radioEPP.grid(row=1, column=0, sticky="ne", padx=(0, 30), pady=(40, 15))
+
         self.radioSH = ctk.CTkRadioButton(
             self,
             width=20,
@@ -368,12 +350,10 @@ class mainUI(ctk.CTk):
             variable=self.idealization_option,
             value="SH",
         )
-        self.radioSH.grid(row=1, column=0, sticky="ne", padx=(0, 15), pady=(40, 15), columnspan=1)
+        self.radioSH.grid(row=1, column=0, sticky="ne", padx=(0, 15), pady=(40, 15))
 
-        # Locked workflow IM selection (feeds existing downstream handlers)
         self.IMs_selection = tk.StringVar(value=self.workflow_config["im_method"])
 
-        # Building parameters
         self.btn_browse_building_parameters = ctk.CTkButton(
             self,
             text="File",
@@ -386,9 +366,8 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.btn_browse_building_parameters.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(325, 0))
+        self.btn_browse_building_parameters.grid(row=1, column=0, sticky="ne", padx=15, pady=(295, 0))
 
-        # Ground motion folder
         self.btn_browse_gmrs = ctk.CTkButton(
             self,
             text="Folder",
@@ -398,9 +377,8 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.btn_browse_gmrs.grid(row=1, column=0, sticky="ne", padx=(15, 15), pady=(385, 0))
+        self.btn_browse_gmrs.grid(row=1, column=0, sticky="ne", padx=15, pady=(355, 0))
 
-        # Generate EDPs
         self.button_generate_EDPs = ctk.CTkButton(
             self,
             text="Generate EDPs",
@@ -410,20 +388,8 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.button_generate_EDPs.grid(row=3, column=0, padx=(0, 0), pady=(50, 0))
+        self.button_generate_EDPs.grid(row=3, column=0, pady=(50, 0))
 
-        self.label_backend_notice = ctk.CTkLabel(
-            self,
-            text="",
-            font=("Inter", 11),
-            fg_color="white",
-            justify="left",
-            wraplength=380,
-            text_color="#8b5e00",
-        )
-        self.label_backend_notice.grid(row=3, column=0, sticky="sw", padx=15, pady=(0, 8))
-
-        # Regression combobox
         self.regression_selection = ttk.Combobox(self, values=["MSA", "GLM", "LogregML"], width=8, font=("Arial", 12))
         self.regression_selection.set("MSA")
         self.regression_selection.grid(row=4, column=0, sticky="ne", padx=(30, 15), pady=(55, 0))
@@ -441,7 +407,6 @@ class mainUI(ctk.CTk):
         self.regulation_selection.grid(row=4, column=0, sticky="ne", padx=(30, 15), pady=(90, 0))
         self.regulation_selection.grid_forget()
 
-        # Statistical fit
         self.button_perform_statistical_fit = ctk.CTkButton(
             self,
             text="Perform statistical fit",
@@ -451,9 +416,8 @@ class mainUI(ctk.CTk):
             text_color="white",
             font=("Inter", 12, "bold"),
         )
-        self.button_perform_statistical_fit.grid(row=4, column=0, sticky="s", padx=(0, 0), pady=(0, 10))
+        self.button_perform_statistical_fit.grid(row=4, column=0, sticky="s", pady=(0, 10))
 
-        # open logs button
         self.button_open_logs = ctk.CTkButton(
             self,
             text="View Logs",
@@ -466,7 +430,6 @@ class mainUI(ctk.CTk):
         )
         self.button_open_logs.grid(row=4, column=2, sticky="se", padx=(5, 30), pady=(0, 4))
 
-        # Helpers:
         self.btn_help = ctk.CTkButton(
             self,
             text="?",
@@ -479,38 +442,35 @@ class mainUI(ctk.CTk):
         )
         self.btn_help.grid(row=4, column=2, sticky="se", padx=(5, 5), pady=(0, 4))
 
-    # ------------------------------------------------------------------
-    #                       Workflow summary / prototype state
-    # ------------------------------------------------------------------
     def _apply_workflow_state(self) -> None:
+        self.IMs_selection.set(self.workflow_config["im_method"])
+        self.refresh_workflow_info()
+        self.refresh_plot_labels()
+        self.button_generate_EDPs.configure(state="normal")
+        self.button_perform_statistical_fit.configure(state="normal")
+
+    def refresh_workflow_info(self) -> None:
         config = self.workflow_config
-        self.label_1_value.configure(text=config["im_method"])
+        im_method = config.get("im_method", "PGA")
+        self.label_workflow_im_value.configure(text=im_method)
 
-        if config["im_method"] == "PGA":
-            self.label_period_mode_value.configure(text="Not required")
-            self.label_workflow_note.configure(text="PGA workflow selected in the startup window.")
-            self.label_backend_notice.configure(text="")
-            self.button_generate_EDPs.configure(state="normal")
-            self.button_perform_statistical_fit.configure(state="normal")
-            return
-
-        if config["period_mode"] == "specified":
-            period_text = f"Specified | T = {config['period_value']:.4g} s"
-            note_text = f"{config['im_method']} will use the provided base period when the backend is added."
+        if im_method == "PGA":
+            period_text = "Not required"
+        elif config.get("period_mode") == "specified":
+            period_text = f"Specified | T = {float(config['period_value']):.4g} s"
         else:
-            period_text = "Calculated later"
-            note_text = "Base period will be estimated after plotting the capacity curve, using the linear section."
+            resolved_period = config.get("resolved_period")
+            if resolved_period is None:
+                period_text = "Calculated later"
+            else:
+                period_text = f"Calculated | T = {float(resolved_period):.4g} s"
 
-        self.label_period_mode_value.configure(text=period_text)
-        self.label_workflow_note.configure(text=note_text)
-        self.label_backend_notice.configure(
-            text=(
-                f"Prototype mode: {config['im_method']} workflow is captured and shown here, "
-                "but analysis/statistical execution for non-PGA IMs is intentionally disabled for now."
-            )
-        )
-        self.button_generate_EDPs.configure(state="disabled")
-        self.button_perform_statistical_fit.configure(state="disabled")
+        self.label_period_source_value.configure(text=period_text)
+
+    def refresh_plot_labels(self) -> None:
+        im_method = self.workflow_config.get("im_method", "PGA")
+        self.label_fragility.configure(text=f"Fragility curve ({im_method})")
+        self.label_vulnerability.configure(text=f"Vulnerability curve ({im_method})")
 
     def _launch_workflow_setup(self) -> None:
         dialog = WorkflowSetupDialog(self)
@@ -521,15 +481,11 @@ class mainUI(ctk.CTk):
             return
 
         self.workflow_config = _normalize_workflow_config(dialog.result)
-        self.IMs_selection.set(self.workflow_config["im_method"])
         self._apply_workflow_state()
         self.deiconify()
         self.lift()
         self.focus_force()
 
-    # ------------------------------------------------------------------
-    #                       UI-only handlers
-    # ------------------------------------------------------------------
     def on_selection_regression(self, event):
         method = self.regression_selection.get()
 
