@@ -89,9 +89,15 @@ def setup_logging(
     *,
     level: Optional[str] = None,
     console: Optional[bool] = None,
-) -> Path:
+) -> tuple[Path, Optional[object]]:
     """
     Call **once** near application start.
+
+    Returns a tuple of (log_file_path, deferred_stdout_redirect).
+
+    The deferred_stdout_redirect is a callable that should be invoked
+    **after** Tkinter is fully initialized to avoid console signal issues
+    on Windows. Call it like: if deferred: deferred()
 
     Parameters
     ----------
@@ -110,20 +116,22 @@ def setup_logging(
     # pick writable log directory
     log_file = user_log_dir() / LOG_FILENAME
 
-    def _apply(target: Path) -> Path:
+    def _apply(target: Path) -> tuple[Path, Optional[object]]:
         cfg = _dict_config(target, level=level, console=console)
         logging.config.dictConfig(cfg)
         logging.captureWarnings(True)
 
-        # Redirect print() if requested and safe (i.e. console handler isn't
-        # using the redirected stream).
+        # Defer print() redirection until after Tkinter is initialized.
+        # This avoids interfering with Tcl's console I/O setup on Windows.
+        deferred_stdout = None
         if settings.log_capture_prints and not console:
-            sys.stdout = _StreamToLogger(logging.getLogger("STDOUT"), logging.INFO)
-            sys.stderr = _StreamToLogger(logging.getLogger("STDERR"), logging.ERROR)
+            def deferred_stdout():
+                sys.stdout = _StreamToLogger(logging.getLogger("STDOUT"), logging.INFO)
+            # Never redirect stderr — crash tracebacks must remain visible in terminal
 
         _install_exception_hooks()
         os.environ["ASFRAVAB_LOG_DIR"] = str(target.parent)
-        return target
+        return target, deferred_stdout
 
     try:
         return _apply(log_file)
@@ -137,6 +145,9 @@ def setup_logging(
 # ────────────────────── global exception hooks ─────────────────────────
 def _handle_uncaught(exc_type, exc_value, exc_tb):
     logging.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+    # Also print to original stderr so the user sees the crash in the terminal
+    import traceback
+    traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.__stderr__)
 
 
 def _thread_excepthook(args: threading.ExceptHookArgs):
