@@ -9,13 +9,23 @@
 
 ---
 
+## ✨ What's New in v1.1.0
+
+- **Multiple Intensity Measure (IM) methods** — choose from PGA, Sa(T), or Sa(avg) via a pre-analysis workflow setup dialog
+- **Sa(T)** — scale ground motion records to spectral acceleration at a user-specified (or auto-derived) structural period
+- **Sa(avg)** — scale to average spectral acceleration over the 0.2T–1.5T period band (10 periods, 5% damping)
+- **J-MLE fragility fitting** — joint maximum likelihood estimation with a shared dispersion parameter; mathematically guarantees non-crossing fragility curves
+- **IDA visualization** — incremental dynamic analysis curves 
+
+---
+
 ## 🚀 Quick Start
 
 ### 📥 Downloading the App (Windows) for Engineer
 
 Download the latest executable from the [Releases](https://github.com/adrianulza/ASFRAVA-B/releases/latest) page:
 
-- **[ASFRAVA-B.exe](https://github.com/adrianulza/ASFRAVA-B/releases/download/v.1.0.0/ASFRAVA-B.zip)** *(after unzip, ~280 MB)*
+- **[ASFRAVA-B.exe](https://github.com/adrianulza/ASFRAVA-B/releases/download/v.1.1.0/ASFRAVA-B.zip)** *(after unzip, ~280 MB)*
 
 ### 🖥️ Running the App
 1. Download and unzip the file.

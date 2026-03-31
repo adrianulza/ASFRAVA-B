@@ -19,7 +19,7 @@ def line_intersection_determinant(x1, y1, x2, y2, x3, y3, x4, y4):
     det = a1 * b2 - a2 * b1
 
     if det == 0:
-        return None  # Lines are parallel or coincident
+        return None  
     else:
         x = (b2 * c1 - b1 * c2) / det
         y = (a1 * c2 - a2 * c1) / det
@@ -51,7 +51,7 @@ def refine_segments(x, y, refinement_factor=6):
 def intersection_point_on_segment(x1, y1, x2, y2, x3, y3, x4, y4):
     denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
     if denom == 0:
-        return None  # Parallel lines
+        return None  
     ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
     ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
     if 0 <= ua <= 1 and 0 <= ub <= 1:
@@ -101,17 +101,6 @@ def find_intersection(rs, idealized_adrs_curve, record, scale):
         best_intersection = min(intersections, key=lambda point: point[0])
     else:
         best_intersection = None
-
-    # # Print the chosen intersection point
-    # """ activate this for printing in terminal and logging """
-    # if best_intersection:
-    #     # Format intersection point: convert to float and round to 4 decimals
-    #     x, y = map(lambda v: round(float(v), 4), best_intersection)
-    #     print(f"Intersection found for Record: {record}, Scale: {scale} at point: ({x}, {y})")
-    #     return x, y
-    # else:
-    #     print(f"No intersection for Record: {record}, Scale: {scale}")
-    #     return None
 
     # Logging the intersection point
     """ activate this for logging-only-mode instead of printing in terminal """

@@ -8,7 +8,6 @@ __pycache__/
 # --- Build artifacts ---
 build/
 dist/
-*.spec
 
 # --- Sample outputs ---
 output/
@@ -18,3 +17,6 @@ output/
 .vscode/
 .DS_Store
 Thumbs.db
+CLAUDE.md
+.claude
+.gitignore

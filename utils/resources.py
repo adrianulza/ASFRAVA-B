@@ -22,8 +22,8 @@ def base_path() -> Path:
     Project base in dev, or PyInstaller temp folder when frozen.
     """
     if _is_frozen():
-        return Path(sys._MEIPASS)  # type: ignore[attr-defined]
-    return Path(__file__).resolve().parents[1]  # utils -> ASFRAVA-B
+        return Path(sys._MEIPASS)  
+    return Path(__file__).resolve().parents[1]  
 
 
 def asset_path(*relative: Union[str, os.PathLike]) -> Path:

@@ -40,15 +40,14 @@ def EPP(data, test_converge=0.001):
     data: DataFrame with columns [Dt(m), Vb(kN)].
     test_converge: The relative area difference threshold for stopping.
     """
-    id_max = data.iloc[:, 1].idxmax()  # index of max base shear
-    max_point = data.iloc[id_max, :2].tolist()  # [x, y]
+    id_max = data.iloc[:, 1].idxmax()  
+    max_point = data.iloc[id_max, :2].tolist()  
     Po_area = area_under_pushover(data, id_max)
 
     x = 0.0
     area = 0.0
 
     # Loop until the area under the 3-point idealization
-    # is close to the actual pushover area
     while (abs(Po_area - area) / Po_area) >= test_converge:
         x += 0.00001
         point1 = [0, 0]
@@ -65,7 +64,7 @@ def SH(data, test_converge=0.001):
     data: DataFrame with columns [Dt(m), Vb(kN)].
     """
     id_max = data.iloc[:, 1].idxmax()
-    max_point = data.iloc[id_max, :2].tolist()  # [x, y]
+    max_point = data.iloc[id_max, :2].tolist()  
     Po_area = area_under_pushover(data, id_max)
 
     x = 0.0
@@ -74,15 +73,12 @@ def SH(data, test_converge=0.001):
     while (abs(Po_area - area) / Po_area) >= test_converge:
         x += 0.00001
         point1 = [0, 0]
-        # We need an intermediate point2 that lies on the original curve
-        # at x=some displacement; but then we adjust it by 0.6, etc.
+
         original_point2 = get_point2_interpolated(data, x)
 
-        # Example: Reduce it by 0.6 factor, or however your logic states:
-        E = original_point2[1] / original_point2[0]  # slope
-        # scale down the force
+        E = original_point2[1] / original_point2[0]  
+
         scaled_force = original_point2[1] / 0.6
-        # recalc the disp using the same slope
         scaled_disp = scaled_force / E
 
         point2 = [scaled_disp, scaled_force]
@@ -99,15 +95,12 @@ def get_point2_interpolated(data, x):
     along the 'Dt(m)' column. data is a DataFrame with columns [Dt(m), Vb(kN)].
     """
     if (data["Dt(m)"] == x).any():
-        # exact match
         idx = data.index[data["Dt(m)"] == x][0]
         return [x, data["Vb(kN)"].iloc[idx]]
     else:
-        # find bracket
         bigger_idx = data.index[data["Dt(m)"] > x]
         if bigger_idx.empty:
-            # x is bigger than any in the data
-            idx = data.index[-2]  # near the end
+            idx = data.index[-2]  
         else:
             idx = bigger_idx[0] - 1
 
@@ -127,10 +120,7 @@ def create_idealized_curve(point1, point2, point3, num_points=10):
     curve between (point1->point2->point3).
     """
     x_values = np.linspace(point1[0], point3[0], num_points)
-    # piecewise:
-    # - from point1.x to point2.x is the first slope
-    # - from point2.x to point3.x is the second slope
-    # We'll do a piecewise definition in 'np.piecewise'
+
     x_p1 = point1[0]
     x_p2 = point2[0]
     x_p3 = point3[0]

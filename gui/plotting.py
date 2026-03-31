@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.figure import Figure
 
 import modules.idealization as IP
 from utils.config import settings
@@ -106,17 +107,43 @@ def plot_EDPs(
     data_EDPs = pd.read_csv(edp_filepath, delimiter=settings.CSV_SEP)
     im_column = _resolve_im_column(data_EDPs, selected_IMs)
 
+    gmr_groups = data_EDPs.groupby("GMR") if "GMR" in data_EDPs.columns else None
+    if gmr_groups is not None:
+        for idx, (_, grp) in enumerate(gmr_groups):
+            grp_sorted = grp.sort_values(im_column)
+            ax.plot(
+                grp_sorted["Sd"],
+                grp_sorted[im_column],
+                color="#222D3E",
+                marker="None",
+                linewidth=1.0,
+                alpha=0.5,
+                label="IDA curves" if idx == 0 else "_nolegend_",
+            )
+
+    ax.scatter(
+        data_EDPs["Sd"],
+        data_EDPs[im_column],
+        alpha=0.5,
+        edgecolors="black",
+        s=50,
+        label="EDPs",
+        zorder=3,
+    )
+    _lines_before = set(ax.lines)
     sns.regplot(
         data=data_EDPs,
         x="Sd",
         y=im_column,
         ax=ax,
         fit_reg=True,
-        line_kws={"color": "grey", "label": "Linear model fit"},
-        scatter_kws={"alpha": 0.5, "edgecolor": "black", "s": 50},
+        scatter=False,
+        line_kws={"color": "grey"},
         ci=95,
         truncate=True,
     )
+    for _line in set(ax.lines) - _lines_before:
+        _line.set_label("Linear model fit")
 
     ax.axvline(ds1_threshold, color="g", linestyle="--", label="DS1 Threshold")
     ax.axvline(ds2_threshold, color="y", linestyle="--", label="DS2 Threshold")
@@ -135,11 +162,7 @@ def plot_EDPs(
 
 
 def plot_curves(rs, idealized, intersection, record, scale, out_dir):
-    import matplotlib
-
-    matplotlib.use("Agg")
-
-    fig = plt.figure(figsize=(4, 3), dpi=100)
+    fig = Figure(figsize=(4, 3), dpi=100)
     ax = fig.add_subplot(111)
     ax.plot(rs["Sd"], rs["Sa"], label="RS", lw=1)
     ax.plot(idealized["Sd"], idealized["Sa"], ls="--", lw=1.5, label="Idealised ADRS")
@@ -151,7 +174,6 @@ def plot_curves(rs, idealized, intersection, record, scale, out_dir):
     fname = f"{Path(record).stem}_scale-{scale}.png"
     os.makedirs(out_dir, exist_ok=True)
     fig.savefig(os.path.join(out_dir, fname), bbox_inches="tight")
-    plt.close(fig)
 
 
 def save_intersection_plots(plot_data, figs_dir):
@@ -171,7 +193,7 @@ def plot_fragility(
     regression_selection_combobox,
     scatter_data,
 ):
-    DATA_LABEL = {"MSA": "Binned", "GLM": "Sampled", "LogregML": "Sampled"}
+    DATA_LABEL = {"MSA": "Binned", "J-MLE": "Binned", "GLM": "Sampled", "LogregML": "Sampled"}
 
     def _draw():
         fig.clear()
@@ -183,7 +205,7 @@ def plot_fragility(
         for i, ds in enumerate(damage_states):
             ax.plot(IM_range, probabilities[ds], color=colors[i], linestyle="-", label=f"{ds.upper()} {sel_reg}")
             point_label = f"{ds.upper()} {DATA_LABEL[sel_reg]}"
-            if sel_reg == "MSA" and scatter_data is not None:
+            if sel_reg in ("MSA", "J-MLE") and scatter_data is not None:
                 ax.scatter(scatter_data[ds]["x"], scatter_data[ds]["y"], alpha=0.5, color=colors[i], label=point_label)
             else:
                 ax.scatter(edps[selected_IMs], edps[ds], alpha=0.10, color=colors[i], label=point_label)

@@ -17,8 +17,17 @@ import modules.idealization as IP
 import modules.intersection as intrs
 from utils.config import settings
 
-SA_SCALING_DAMPING = 0.05
-MIN_IM_TOL = 1.0e-12
+SA_SCALING_DAMPING    = 0.05
+MIN_IM_TOL            = 1.0e-12
+
+GRAVITY               = 9.81       # OpenSees timeSeries factor & response conversion
+GRAVITY_SI            = 9.80665    # exact SI gravity for mass unit conversion (ton → N)
+NLTHA_DAMPING         = 0.05       # Rayleigh current-stiffness proportional damping ratio
+NLTHA_TINIT           = 0.000001   # near-zero anchor period for response spectrum
+NLTHA_TMAX            = 4.0        # upper period bound for response spectrum
+NLTHA_TSTEP           = 0.02       # period step for response spectrum
+CSV_IM_DECIMALS       = 8
+CSV_RESPONSE_DECIMALS = 4
 
 
 def create_idealized_curve(point1, point2, point3):
@@ -54,7 +63,7 @@ def compute_pseudo_spectral_acceleration(acc_g: np.ndarray, dt: float, period: f
     vel = np.zeros(npts, dtype=float)
     acc_rel = np.zeros(npts, dtype=float)
 
-    load = -9.81 * acc_g
+    load = -GRAVITY * acc_g
     acc_rel[0] = (load[0] - damping * vel[0] - stiffness * disp[0]) / mass
 
     a0 = 1.0 / (beta * dt**2)
@@ -77,7 +86,23 @@ def compute_pseudo_spectral_acceleration(acc_g: np.ndarray, dt: float, period: f
         acc_rel[i + 1] = a0 * (disp[i + 1] - disp[i]) - a2 * vel[i] - a3 * acc_rel[i]
         vel[i + 1] = vel[i] + a6 * acc_rel[i] + a7 * acc_rel[i + 1]
 
-    return float((omega**2) * np.max(np.abs(disp)) / 9.81)
+    return float((omega**2) * np.max(np.abs(disp)) / GRAVITY)
+
+
+def _extract_uniform_dt(time_values: np.ndarray) -> float:
+    time_values = np.asarray(time_values, dtype=float)
+    if time_values.size < 2:
+        raise ValueError("Ground motion file must contain at least two time samples.")
+    if not np.all(np.isfinite(time_values)):
+        raise ValueError("Ground motion time column contains NaN or infinite values.")
+    dt_values = np.diff(time_values)
+    if np.any(dt_values <= 0.0):
+        raise ValueError("Ground motion time column must be strictly increasing.")
+    dt = float(np.mean(dt_values))
+    tol = max(1.0e-8, 1.0e-6 * dt)
+    if not np.allclose(dt_values, dt, rtol=1.0e-4, atol=tol):
+        raise ValueError("Ground motion time step is not uniform enough for response-spectrum evaluation.")
+    return dt
 
 
 def analyze(
@@ -119,7 +144,7 @@ def analyze(
     strength_u = point3[1]
 
     building_params["normalization_factor"] = building_params.iloc[:, 2] / building_params.iloc[0, 2]
-    building_params["Mass(N)"] = building_params.iloc[:, 1] * 9.80665
+    building_params["Mass(N)"] = building_params.iloc[:, 1] * GRAVITY_SI
     mxmode = (building_params["Mass(N)"] * building_params["normalization_factor"]).sum()
     mxmode2 = (building_params["Mass(N)"] * building_params["normalization_factor"] ** 2).sum()
     mxmode3 = mxmode**2
@@ -145,13 +170,8 @@ def analyze(
     state_list = []
     gmr_list = []
 
-    g = 9.81
-    xDamp = 0.05
-    Tinit = 0.000001
-    Tmax = 4.0
-    Tstep = 0.02
-    Tn = np.arange(Tstep, Tmax + Tstep, Tstep)
-    Tn = np.insert(Tn, 0, Tinit)
+    Tn = np.arange(NLTHA_TSTEP, NLTHA_TMAX + NLTHA_TSTEP, NLTHA_TSTEP)
+    Tn = np.insert(Tn, 0, NLTHA_TINIT)
 
     plot_data = []
 
@@ -159,7 +179,8 @@ def analyze(
         try:
             fp = os.path.join(gmrs_folderpath, record)
             GMRS = pd.read_csv(fp, delimiter=settings.CSV_SEP, header=0, engine="python")
-            dt = abs(GMRS.iloc[1, 0] - GMRS.iloc[0, 0])
+            time_values = GMRS.iloc[:, 0].to_numpy(dtype=float)
+            dt = _extract_uniform_dt(time_values)
             nPts = len(GMRS)
             GMRS_acc_raw = GMRS.iloc[:, 1].to_numpy(dtype=float)
 
@@ -198,10 +219,10 @@ def analyze(
                     ops.uniaxialMaterial("Hardening", matTag, Ki, strength_y, 0, Hkin)
                     ops.element("zeroLength", 1, 1, 2, "-mat", 1, "-dir", 1, "-doRayleigh", 1)
 
-                    ops.timeSeries("Path", 2, "-values", *GMRS_acc_scaled, "-dt", dt, "-factor", g)
+                    ops.timeSeries("Path", 2, "-values", *GMRS_acc_scaled, "-dt", dt, "-factor", GRAVITY)
                     ops.pattern("UniformExcitation", 1, 1, "-accel", 2)
 
-                    betaKcomm = 2.0 * xDamp / omega
+                    betaKcomm = 2.0 * NLTHA_DAMPING / omega
                     ops.rayleigh(0.0, 0.0, 0.0, betaKcomm)
 
                     ops.wipeAnalysis()
@@ -229,7 +250,7 @@ def analyze(
                             u1.append(ops.nodeDisp(2, 1))
 
                     max_disp = np.max(np.abs(u1)) if u1 else 0.0
-                    Acc.append(max_disp * (omega**2) / g)
+                    Acc.append(max_disp * (omega**2) / GRAVITY)
                     Disp.append(max_disp)
 
                 Acc = np.asarray(Acc)
@@ -301,7 +322,11 @@ def analyze(
         except Exception as exc:
             logger.error("Analysis error with record %s: %s", record, exc, exc_info=True)
 
-    assert len(sdv_point) == len(im_point) == len(sa_point) == len(state_list) == len(gmr_list), "List lengths mismatch"
+    if not (len(sdv_point) == len(im_point) == len(sa_point) == len(state_list) == len(gmr_list)):
+        raise RuntimeError(
+            f"Internal list length mismatch: sdv={len(sdv_point)}, im={len(im_point)}, "
+            f"sa={len(sa_point)}, state={len(state_list)}, gmr={len(gmr_list)}"
+        )
 
     edps_df = pd.DataFrame(
         {
@@ -311,7 +336,10 @@ def analyze(
             "Status": state_list,
             "GMR": gmr_list,
         }
-    ).round(4)
+    )
+    edps_df["Sd"]      = edps_df["Sd"].round(CSV_RESPONSE_DECIMALS)
+    edps_df[im_column] = edps_df[im_column].round(CSV_IM_DECIMALS)
+    edps_df["SA"]      = edps_df["SA"].round(CSV_RESPONSE_DECIMALS)
 
     edps_df["ds1"] = (edps_df["Sd"] >= ds1_threshold).astype(int)
     edps_df["ds2"] = (edps_df["Sd"] >= ds2_threshold).astype(int)

@@ -363,6 +363,8 @@ def _model_analysis(app, analyzing_dialog: ctk.CTkToplevel):
 def perform_statistical_fit(app):
     selected_IMs = _selected_im(app)
     selected_regression = app.regression_selection.get()
+    if selected_regression == "MSA" and app.msa_variant_selection.get() == "J-MLE":
+        selected_regression = "J-MLE"
     regulation = app.regulation_selection.get()
     output_folder = app.entry_folder_output.get().strip()
 

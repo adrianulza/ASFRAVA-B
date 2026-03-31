@@ -24,7 +24,12 @@ AVGSA_MAX_PERIOD_RATIO = 1.5
 AVGSA_NUM_PERIODS = 10
 AVGSA_DAMPING_RATIO = 0.05
 AVGSA_NEAR_ZERO_ANCHOR_RATIO = 0.01
-GRAVITY = 9.81
+GRAVITY               = 9.81       # OpenSees timeSeries factor & response conversion
+GRAVITY_SI            = 9.80665    # exact SI gravity for mass unit conversion (ton → N)
+NLTHA_DAMPING         = 0.05       # Rayleigh current-stiffness proportional damping ratio
+NLTHA_TINIT           = 0.000001   # near-zero anchor period for response spectrum
+NLTHA_TMAX            = 4.0        # upper period bound for response spectrum
+NLTHA_TSTEP           = 0.02       # period step for response spectrum
 CSV_IM_DECIMALS = 8
 CSV_RESPONSE_DECIMALS = 4
 
@@ -250,7 +255,7 @@ def analyze(
     strength_u = point3[1]
 
     building_params["normalization_factor"] = building_params.iloc[:, 2] / building_params.iloc[0, 2]
-    building_params["Mass(N)"] = building_params.iloc[:, 1] * 9.80665
+    building_params["Mass(N)"] = building_params.iloc[:, 1] * GRAVITY_SI
     mxmode = (building_params["Mass(N)"] * building_params["normalization_factor"]).sum()
     mxmode2 = (building_params["Mass(N)"] * building_params["normalization_factor"] ** 2).sum()
     mxmode3 = mxmode**2
@@ -277,12 +282,8 @@ def analyze(
     gmr_list = []
     plot_data = []
 
-    xDamp = 0.05
-    Tinit = 0.000001
-    Tmax = 4.0
-    Tstep = 0.02
-    Tn = np.arange(Tstep, Tmax + Tstep, Tstep)
-    Tn = np.insert(Tn, 0, Tinit)
+    Tn = np.arange(NLTHA_TSTEP, NLTHA_TMAX + NLTHA_TSTEP, NLTHA_TSTEP)
+    Tn = np.insert(Tn, 0, NLTHA_TINIT)
 
     for record in list_gmrs_data:
         try:
@@ -326,7 +327,7 @@ def analyze(
                     ops.timeSeries("Path", 2, "-values", *GMRS_acc_scaled, "-dt", dt, "-factor", GRAVITY)
                     ops.pattern("UniformExcitation", 1, 1, "-accel", 2)
 
-                    betaKcomm = 2.0 * xDamp / omega
+                    betaKcomm = 2.0 * NLTHA_DAMPING / omega
                     ops.rayleigh(0.0, 0.0, 0.0, betaKcomm)
 
                     ops.wipeAnalysis()
@@ -422,7 +423,11 @@ def analyze(
         except Exception as exc:
             logger.error("Analysis error with record %s: %s", record, exc, exc_info=True)
 
-    assert len(sdv_point) == len(im_point) == len(sa_point) == len(state_list) == len(gmr_list), "List lengths mismatch"
+    if not (len(sdv_point) == len(im_point) == len(sa_point) == len(state_list) == len(gmr_list)):
+        raise RuntimeError(
+            f"Internal list length mismatch: sdv={len(sdv_point)}, im={len(im_point)}, "
+            f"sa={len(sa_point)}, state={len(state_list)}, gmr={len(gmr_list)}"
+        )
 
     edps_df = pd.DataFrame(
         {
