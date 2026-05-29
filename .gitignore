@@ -11,7 +11,10 @@ dist/
 
 # --- Sample outputs ---
 output/
-    
+
+# --- Working folder for IM-comparison study (session scratch) ---
+_study-summary/
+
 
 # --- IDE / OS junk ---
 .vscode/
