@@ -25,7 +25,7 @@
 
 Download the latest executable from the [Releases](https://github.com/adrianulza/ASFRAVA-B/releases/latest) page:
 
-- **[ASFRAVA-B.exe](https://github.com/adrianulza/ASFRAVA-B/releases/download/v.1.1.0/ASFRAVA-B.zip)** *(after unzip, ~280 MB)*
+- **[ASFRAVA-B.exe](https://github.com/adrianulza/ASFRAVA-B/releases/download/v.1.1.0/ASFRAVA-B.v.1.1.0.rar)** *(after unzip, ~280 MB)*
 
 ### 🖥️ Running the App
 1. Download and unzip the file.
